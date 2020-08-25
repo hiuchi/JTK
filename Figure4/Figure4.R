@@ -12,7 +12,7 @@ set.seed(8)
 
 #parameters
 trial <- 1000
-file <- "~/Research/200820_spies/data/30M_3rep_4TP_contr.txt"
+file <- "./data/30M_3rep_4TP_contr.txt"
 
 calc.JTK <- function(d){
     control.seq <- as.numeric(d)[(length(d) / 2 + 1):length(d)]
