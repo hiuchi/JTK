@@ -242,6 +242,5 @@ g <- g + geom_errorbar(aes(ymin = elapsed_time - sd, ymax = elapsed_time + sd))
 g <- g + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 g <- g + scale_y_log10()
 g
-ggsave(g, file = "time.pdf", dpi = 300)
 ggsave(g, file = "time.eps", dpi = 300)
 
