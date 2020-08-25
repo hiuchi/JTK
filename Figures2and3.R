@@ -1,3 +1,5 @@
+#This is the source code to draw Figures 2 and 3.
+
 require(tidyverse)
 require(poweRlaw)
 require(ImpulseDE2)
