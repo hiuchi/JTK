@@ -1,4 +1,4 @@
-This is the scripts to reproduce Figure4A and 4B.
+#This is the scripts to reproduce Figure 4A and 4B.
 
 require(tidyverse)
 require(snowfall)
