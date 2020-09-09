@@ -2,5 +2,5 @@
 
 [Figures 2 and 3](/Figures2and3.R)  
 [Figure 4](/Figure4/)  
-[Figure 5 and 6](/Figure5and6/)  
+[Figures 5 and 6](/Figures5and6.R/)  
 [Figure 7](/Figure7.R)
