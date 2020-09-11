@@ -1,8 +1,7 @@
-#This is the source code to reproduce Figures 5 and 6.
-
 require(tidyverse)
 require(edgeR)
 require(biomaRt)
+library(GenomicFeatures)
 require(snowfall)
 require(maSigPro)
 require(splineTimeR)
@@ -10,9 +9,8 @@ require(ImpulseDE2)
 require(ggVennDiagram)
 theme_set(theme_bw(base_size = 20))
 
-cpus <- 4
-
 #read files
+setwd("~/Research/200905_Cardoso/")
 mouse.list <- list.files("./results", full.names = TRUE, pattern = "Mouse")
 size.files <- file.info(mouse.list)$size
 mouse.list <- mouse.list[size.files != 0]
@@ -31,10 +29,20 @@ for(i in mouse.list){
 gene.name <- mouse$gene
 mouse <- mouse[,-1]
 mouse <- as.matrix(mouse)
-mouse <- cpm(mouse)
+rownames(mouse) <- gene.name
+
+#calculate rpkm
+setwd("~/Research/200911_Cardoso/")
+length <- makeTxDbFromGFF('Mus_musculus.GRCm38.101.gtf', format = 'gtf')
+length <- exonsBy(length, by = 'gene')
+length <- lapply(length, function(x){sum(width(reduce(x)))})
+mouse.length <- NULL
+for(i in gene.name) mouse.length <- c(mouse.length, length[i])
+mouse <- rpkm(mouse, as.numeric(mouse.length))
 mouse <- as_tibble(mouse)
 mouse$gene <- gene.name
 
+setwd("~/Research/200905_Cardoso/")
 rat.list <- list.files("./results", full.names = TRUE, pattern = "Rat")
 size.files <- file.info(rat.list)$size
 rat.list <- rat.list[size.files != 0]
@@ -50,7 +58,15 @@ for(i in rat.list){
 gene.name <- rat$gene
 rat <- rat[,-1]
 rat <- as.matrix(rat)
-rat <- cpm(rat)
+rownames(rat) <- gene.name
+
+setwd("~/Research/200911_Cardoso/")
+length <- makeTxDbFromGFF('Rattus_norvegicus.Rnor_6.0.101.gtf', format = 'gtf')
+length <- exonsBy(length, by = 'gene')
+length <- lapply(length, function(x){sum(width(reduce(x)))})
+rat.length <- NULL
+for(i in gene.name) rat.length <- c(rat.length, length[i])
+rat <- rpkm(rat, as.numeric(rat.length))
 rat <- as_tibble(rat)
 rat$gene <- gene.name
 
@@ -61,6 +77,7 @@ genes <- getLDS(attributes = "ensembl_gene_id",
                 martL = useMart("ensembl", dataset = "rnorvegicus_gene_ensembl"), uniqueRows = T)
 genes <- genes %>% distinct(Gene.stable.ID, .keep_all = TRUE)
 genes <- genes %>% distinct(Gene.stable.ID.1, .keep_all = TRUE)
+
 convert <- NULL
 for(i in rat$gene){
   gene.name <- genes[,1][genes[,2] == i][1]
@@ -70,11 +87,11 @@ for(i in rat$gene){
 rat$gene <- convert
 rat <- na.omit(rat)
 
-cpm <- inner_join(mouse, rat, by = "gene")
-cpm <- cpm[, c(316, 1:315, 317:ncol(cpm))]
-cpm <- cpm[rowSums(cpm[,-1]) != 0,]
+rpkm <- inner_join(mouse, rat, by = "gene")
+rpkm <- rpkm[, c(316, 1:315, 317:ncol(rpkm))]
+rpkm <- rpkm[rowSums(rpkm[,-1]) != 0,]
 
-column.names <- str_split(colnames(cpm), pattern = "[.]", n = Inf, simplify = TRUE)[,1:2]
+column.names <- str_split(colnames(rpkm), pattern = "[.]", n = Inf, simplify = TRUE)[,1:2]
 for(i in 1:nrow(column.names)) if(column.names[i, 2] != "") column.names[i, 1] <- paste(column.names[i, 1], column.names[i, 2], sep = ".")
 for(i in column.names){
   if(sum(column.names == i) > 1){
@@ -85,90 +102,91 @@ for(i in column.names){
   }
 }
 column.names[1] <- "gene"
-colnames(cpm) <- column.names
-cpm <- cpm %>% pivot_longer(-gene, names_to = "label", values_to = "CPM")
-labels <- cpm$label %>% str_split(pattern = "_", simplify = TRUE)
-cpm$organism <- labels[,1]
-cpm$organ <- labels[,2]
-cpm$stage <- labels[,3]
-cpm$replicates <- labels[,4]
+colnames(rpkm) <- column.names
+rpkm <- rpkm %>% pivot_longer(-gene, names_to = "label", values_to = "rpkm")
+labels <- rpkm$label %>% str_split(pattern = "_", simplify = TRUE)
+rpkm$organism <- labels[,1]
+rpkm$organ <- labels[,2]
+rpkm$stage <- labels[,3]
+rpkm$replicates <- labels[,4]
 
-cpm$sequence <- NA
-cpm$sequence[cpm$organism == "Mouse" & cpm$stage == 10.5] <- 0
-cpm$sequence[cpm$organism == "Mouse" & cpm$stage == 11.5] <- 1
-cpm$sequence[cpm$organism == "Mouse" & cpm$stage == 12.5] <- 2
-cpm$sequence[cpm$organism == "Mouse" & cpm$stage == 13.5] <- 3
-cpm$sequence[cpm$organism == "Mouse" & cpm$stage == 14.5] <- 4
-cpm$sequence[cpm$organism == "Mouse" & cpm$stage == 15.5] <- 5
-cpm$sequence[cpm$organism == "Mouse" & cpm$stage == 16.5] <- 6
-cpm$sequence[cpm$organism == "Mouse" & cpm$stage == 17.5] <- 7
-cpm$sequence[cpm$organism == "Mouse" & cpm$stage == "0dpb"] <- 8
-cpm$sequence[cpm$organism == "Mouse" & cpm$stage == "3dpb"] <- 9
-cpm$sequence[cpm$organism == "Mouse" & cpm$stage == "2wpb"] <- 10
-cpm$sequence[cpm$organism == "Mouse" & cpm$stage == "4wpb"] <- 11
-cpm$sequence[cpm$organism == "Mouse" & cpm$stage == "9wpb"] <- 12
+rpkm$sequence <- NA
+rpkm$sequence[rpkm$organism == "Mouse" & rpkm$stage == 10.5] <- 0
+rpkm$sequence[rpkm$organism == "Mouse" & rpkm$stage == 11.5] <- 1
+rpkm$sequence[rpkm$organism == "Mouse" & rpkm$stage == 12.5] <- 2
+rpkm$sequence[rpkm$organism == "Mouse" & rpkm$stage == 13.5] <- 3
+rpkm$sequence[rpkm$organism == "Mouse" & rpkm$stage == 14.5] <- 4
+rpkm$sequence[rpkm$organism == "Mouse" & rpkm$stage == 15.5] <- 5
+rpkm$sequence[rpkm$organism == "Mouse" & rpkm$stage == 16.5] <- 6
+rpkm$sequence[rpkm$organism == "Mouse" & rpkm$stage == 17.5] <- 7
+rpkm$sequence[rpkm$organism == "Mouse" & rpkm$stage == "0dpb"] <- 8
+rpkm$sequence[rpkm$organism == "Mouse" & rpkm$stage == "3dpb"] <- 9
+rpkm$sequence[rpkm$organism == "Mouse" & rpkm$stage == "2wpb"] <- 10
+rpkm$sequence[rpkm$organism == "Mouse" & rpkm$stage == "4wpb"] <- 11
+rpkm$sequence[rpkm$organism == "Mouse" & rpkm$stage == "9wpb"] <- 12
 
-cpm$sequence[cpm$organism == "Rat" & cpm$stage == "11"] <- 0
-cpm$sequence[cpm$organism == "Rat" & cpm$stage == "12"] <- 1
-cpm$sequence[cpm$organism == "Rat" & cpm$stage == "14"] <- 2
-cpm$sequence[cpm$organism == "Rat" & cpm$stage == "15"] <- 3
-cpm$sequence[cpm$organism == "Rat" & cpm$stage == "16"] <- 4
-cpm$sequence[cpm$organism == "Rat" & cpm$stage == "18"] <- 5
-cpm$sequence[cpm$organism == "Rat" & cpm$stage == "19"] <- 6
-cpm$sequence[cpm$organism == "Rat" & cpm$stage == "20"] <- 7
-cpm$sequence[cpm$organism == "Rat" & cpm$stage == "0dpb"] <- 8
-cpm$sequence[cpm$organism == "Rat" & cpm$stage == "3dpb"] <- 9
-cpm$sequence[cpm$organism == "Rat" & cpm$stage == "2wpb"] <- 10
-cpm$sequence[cpm$organism == "Rat" & cpm$stage == "6wpb"] <- 11
-cpm$sequence[cpm$organism == "Rat" & cpm$stage == "16wpb"] <- 12
-cpm <- na.omit(cpm)
-cpm <- cpm %>% filter(organ != 'WholeBrain')
-cpm.smr <- cpm %>% group_by(gene, organism, organ, sequence) %>% summarise(mean = mean(CPM), sd = sd(CPM))
+rpkm$sequence[rpkm$organism == "Rat" & rpkm$stage == "11"] <- 0
+rpkm$sequence[rpkm$organism == "Rat" & rpkm$stage == "12"] <- 1
+rpkm$sequence[rpkm$organism == "Rat" & rpkm$stage == "14"] <- 2
+rpkm$sequence[rpkm$organism == "Rat" & rpkm$stage == "15"] <- 3
+rpkm$sequence[rpkm$organism == "Rat" & rpkm$stage == "16"] <- 4
+rpkm$sequence[rpkm$organism == "Rat" & rpkm$stage == "18"] <- 5
+rpkm$sequence[rpkm$organism == "Rat" & rpkm$stage == "19"] <- 6
+rpkm$sequence[rpkm$organism == "Rat" & rpkm$stage == "20"] <- 7
+rpkm$sequence[rpkm$organism == "Rat" & rpkm$stage == "0dpb"] <- 8
+rpkm$sequence[rpkm$organism == "Rat" & rpkm$stage == "3dpb"] <- 9
+rpkm$sequence[rpkm$organism == "Rat" & rpkm$stage == "2wpb"] <- 10
+rpkm$sequence[rpkm$organism == "Rat" & rpkm$stage == "6wpb"] <- 11
+rpkm$sequence[rpkm$organism == "Rat" & rpkm$stage == "16wpb"] <- 12
+rpkm <- na.omit(rpkm)
+rpkm <- rpkm %>% filter(organ != 'WholeBrain')
+rpkm.smr <- rpkm %>% group_by(gene, organism, organ, sequence) %>% summarise(mean = mean(rpkm), sd = sd(rpkm))
 
-save(cpm, file ="cpm.RData")
-save(cpm.smr, file ="cpm.smr.RData")
+save(rpkm, file ="rpkm.RData")
+save(rpkm.smr, file ="rpkm.smr.RData")
 
 #ImpulseDE2
-mouse.list <- list.files("./results", full.names = TRUE, pattern = "Mouse")
-size.files <- file.info(mouse.list)$size
-mouse.list <- mouse.list[size.files != 0]
-mouse <- read_table2(mouse.list[1], col_names = FALSE)[,1]
-mouse <- mouse[1:(nrow(mouse) - 5),]
-colnames(mouse) <- "gene"
-for(i in mouse.list){
-  mouse <- bind_cols(mouse, read_table2(i, col_names = FALSE)[1:nrow(mouse),2])
+setwd("~/Research/200905_Cardoso/")
+mouse.counts.list <- list.files("./results", full.names = TRUE, pattern = "Mouse")
+size.files <- file.info(mouse.counts.list)$size
+mouse.counts.list <- mouse.counts.list[size.files != 0]
+mouse.counts <- read_table2(mouse.counts.list[1], col_names = FALSE)[,1]
+mouse.counts <- mouse.counts[1:(nrow(mouse.counts) - 5),]
+colnames(mouse.counts) <- "gene"
+for(i in mouse.counts.list){
+  mouse.counts <- bind_cols(mouse.counts, read_table2(i, col_names = FALSE)[1:nrow(mouse.counts),2])
   name <- str_split(i, "/", simplify = TRUE)[3] %>% str_split("\\.", simplify = TRUE)
   if(length(name) == 8){
-    colnames(mouse)[ncol(mouse)] <- name[,3:5] %>% str_flatten(collapse = "_")
+    colnames(mouse.counts)[ncol(mouse.counts)] <- name[,3:5] %>% str_flatten(collapse = "_")
   }else{
-    colnames(mouse)[ncol(mouse)] <- paste(name[,3:5] %>% str_flatten(collapse = "_"), name[,6], sep = ".")
+    colnames(mouse.counts)[ncol(mouse.counts)] <- paste(name[,3:5] %>% str_flatten(collapse = "_"), name[,6], sep = ".")
   }
 }
-gene.name <- mouse$gene
-mouse <- mouse[,-1]
-mouse <- as_tibble(mouse)
-mouse$gene <- gene.name
+gene.name <- mouse.counts$gene
+mouse.counts <- mouse.counts[,-1]
+mouse.counts <- as_tibble(mouse.counts)
+mouse.counts$gene <- gene.name
 
-rat.list <- list.files("./results", full.names = TRUE, pattern = "Rat")
-size.files <- file.info(rat.list)$size
-rat.list <- rat.list[size.files != 0]
-rat <- read_table2(rat.list[1], col_names = FALSE)[,1]
-rat <- rat[1:(nrow(rat) - 5),]
-colnames(rat) <- "gene"
-for(i in rat.list){
-  rat <- bind_cols(rat, read_table2(i, col_names = FALSE)[1:nrow(rat),2])
+rat.counts.list <- list.files("./results", full.names = TRUE, pattern = "Rat")
+size.files <- file.info(rat.counts.list)$size
+rat.counts.list <- rat.counts.list[size.files != 0]
+rat.counts <- read_table2(rat.counts.list[1], col_names = FALSE)[,1]
+rat.counts <- rat.counts[1:(nrow(rat.counts) - 5),]
+colnames(rat.counts) <- "gene"
+for(i in rat.counts.list){
+  rat.counts <- bind_cols(rat.counts, read_table2(i, col_names = FALSE)[1:nrow(rat.counts),2])
   name <- str_split(i, "/", simplify = TRUE)[3] %>% str_split("\\.", simplify = TRUE)
   name <- name[,3:5] %>% str_flatten(collapse = "_")
-  colnames(rat)[ncol(rat)] <- name
+  colnames(rat.counts)[ncol(rat.counts)] <- name
 }
-gene.name <- rat$gene
-rat <- rat[,-1]
-rat <- as_tibble(rat)
-rat$gene <- gene.name
-rat$gene <- convert
-rat <- na.omit(rat)
+gene.name <- rat.counts$gene
+rat.counts <- rat.counts[,-1]
+rat.counts <- as_tibble(rat.counts)
+rat.counts$gene <- gene.name
+rat.counts$gene <- convert
+rat.counts <- na.omit(rat.counts)
 
-counts <- inner_join(mouse, rat, by = "gene")
+counts <- inner_join(mouse.counts, rat.counts, by = "gene")
 counts <- counts[, c(316, 1:315, 317:ncol(counts))]
 counts <- counts[rowSums(counts[,-1]) != 0,]
 
@@ -221,7 +239,7 @@ counts$sequence[counts$organism == "Rat" & counts$stage == "6wpb"] <- 11
 counts$sequence[counts$organism == "Rat" & counts$stage == "16wpb"] <- 12
 counts <- na.omit(counts)
 counts <- counts %>% filter(organ != 'WholeBrain')
-counts <- counts %>% arrange(organism, sequence)
+setwd("~/Research/200911_Cardoso/")
 save(counts, file ="counts.RData")
 
 #function and variables
@@ -255,15 +273,15 @@ calc.JTK <- function(gene.name){
 }
 
 set.seed(8)
+cpus <- 4
 result <- tibble(organ = NA, gene = NA, method = NA, p = NA, q = NA)
 minimum.tp <- 10
-for(org in cpm$organ %>% unique){
+for(org in rpkm.smr$organ %>% unique){
   print(org)
-  d <- cpm.smr %>% filter(organ == org)
+  d <- rpkm.smr %>% filter(organ == org)
   m <- filter(d, organism == "Mouse")
   r <- filter(d, organism == "Rat")
-  seq <- c(unique(r$sequence), unique(m$sequence))[duplicated(c(unique(r$sequence), unique(m$sequence)))]
-  d <- d %>% filter(sequence %in% seq)
+  d <- d %>% filter(sequence %in% intersect(unique(r$sequence), unique(m$sequence)))
   d$label <- paste(d$organism, d$sequence, sep = "_")
   d <- d %>% pivot_wider(id_cols = -c(organism, organ, sequence, sd),
                          names_from = label, values_from = mean)
@@ -333,13 +351,13 @@ for(org in cpm$organ %>% unique){
                                  method = paste0("splineTC(df=", parameter, ")"),
                                  p = diffExprs$P.Value,
                                  q = p.adjust(diffExprs$P.Value, method = "BH"))
-    }
+  }
+  
   #ImpuseDE2
   d <- counts %>% filter(organ == org)
-  r <- filter(d, organism == "Rat")
   m <- filter(d, organism == "Mouse")
-  seq <- c(unique(r$sequence), unique(m$sequence))[duplicated(c(unique(r$sequence), unique(m$sequence)))]
-  d <- d %>% filter(sequence %in% seq)
+  r <- filter(d, organism == "Rat")
+  d <- d %>% filter(sequence %in% intersect(unique(m$sequence), unique(r$sequence)))
   d$label <- paste(d$organism, d$sequence, d$replicates, sep = "_")
   d <- d %>% pivot_wider(id_cols = -c(organism, organ, stage, replicates, sequence),
                          names_from = label, values_from = counts)
@@ -389,25 +407,28 @@ for(org in result$organ %>% unique){
   d <- list(JTK = jtk, maSigPro = masigpro, splineTC = splinetc, ImpulseDE2 = impulsede2)
   g <- ggVennDiagram(d, label = "count") + scale_fill_gradient(low = "white", high = "white", guide = FALSE)
   g <- g + ggtitle(paste0(org, " (", nrow(data %>% filter(method == "JTK")), " genes)"))
+  g <- g + xlim(0, NA)
   ggsave(g, file = paste0("./plots/venndiagram/", org, ".eps"))
   
   jtk.unique <- setdiff(jtk, c(masigpro, splinetc))
   dir.create(paste0("./plots/", org))
   
   for(i in jtk.unique){
-    d <- cpm.smr %>% filter(organ == org, gene == i)
+    d <- rpkm.smr %>% filter(organ == org, gene == i)
     g <- ggplot(d, aes(x = sequence, y = mean, colour = organism))
     g <- g + geom_point() + geom_line() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd))
-    g <- g + ggtitle(paste(org, i, sep = ", ")) + xlab("Stage") + ylab("Expression (CPM)")
+    g <- g + ggtitle(paste(org, i, sep = ", ")) + xlab("Stage") + ylab("Expression (rpkm)")
+    g <- g + guides(colour=FALSE)
     ggsave(g, file = paste0("./plots/", org, "/", i, ".eps"))
   }
   
   pc <- intersect(jtk, c(masigpro, splinetc, impulsede2))
   for(i in pc){
-    d <- cpm.smr %>% filter(organ == org, gene == i)
+    d <- rpkm.smr %>% filter(organ == org, gene == i)
     g <- ggplot(d, aes(x = sequence, y = mean, colour = organism))
     g <- g + geom_point() + geom_line() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd))
-    g <- g + ggtitle(paste(org, i, sep = ", ")) + xlab("Stage") + ylab("Expression (CPM)")
+    g <- g + ggtitle(paste(org, i, sep = ", ")) + xlab("Stage") + ylab("Expression (rpkm)")
+    g <- g + guides(colour=FALSE)
     ggsave(g, file = paste0("./plots/pc/", i, ".eps"))
   }
 }
