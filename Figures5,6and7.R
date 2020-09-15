@@ -275,7 +275,7 @@ calc.JTK <- function(gene.name){
 set.seed(8)
 cpus <- 4
 result <- tibble(organ = NA, gene = NA, method = NA, p = NA, q = NA)
-minimum.tp <- 10
+minimum.tp <- 8
 for(org in rpkm.smr$organ %>% unique){
   print(org)
   d <- rpkm.smr %>% filter(organ == org)
@@ -396,11 +396,11 @@ save(result, file = "result.RData")
 for(org in result$organ %>% unique){
   data <- result %>% filter(organ == org)
   jtk <- data %>% filter(method == "JTK")
-  jtk <- jtk$gene[jtk$q < 0.01]
+  jtk <- jtk$gene[jtk$q < 0.05]
   masigpro <- data %>% filter(method == "maSigPro(degree=3)")
-  masigpro <- masigpro$gene[masigpro$q < 0.01]
+  masigpro <- masigpro$gene[masigpro$q < 0.05]
   splinetc <- data %>% filter(method == "splineTC(df=3)")
-  splinetc <- splinetc$gene[splinetc$q < 0.01]
+  splinetc <- splinetc$gene[splinetc$q < 0.05]
   impulsede2 <- data %>% filter(method == "ImpulseDE2")
   impulsede2 <- impulsede2$gene[impulsede2$q < 0.05]
   
@@ -417,8 +417,8 @@ for(org in result$organ %>% unique){
     d <- rpkm.smr %>% filter(organ == org, gene == i)
     g <- ggplot(d, aes(x = sequence, y = mean, colour = organism))
     g <- g + geom_point() + geom_line() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd))
-    g <- g + ggtitle(paste(org, i, sep = ", ")) + xlab("Stage") + ylab("Expression (rpkm)")
-    g <- g + guides(colour=FALSE)
+    g <- g + ggtitle(paste(org, i, sep = ", ")) + xlab("Stage") + ylab("Expression (RPKM)")
+    g <- g + guides(colour=FALSE) + xlim(0, NA)
     ggsave(g, file = paste0("./plots/", org, "/", i, ".eps"))
   }
   
@@ -427,9 +427,22 @@ for(org in result$organ %>% unique){
     d <- rpkm.smr %>% filter(organ == org, gene == i)
     g <- ggplot(d, aes(x = sequence, y = mean, colour = organism))
     g <- g + geom_point() + geom_line() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd))
-    g <- g + ggtitle(paste(org, i, sep = ", ")) + xlab("Stage") + ylab("Expression (rpkm)")
+    g <- g + ggtitle(paste(org, i, sep = ", ")) + xlab("Stage") + ylab("Expression (RPKM)")
     g <- g + guides(colour=FALSE)
     ggsave(g, file = paste0("./plots/pc/", i, ".eps"))
+  }
+  
+  jtk <- data %>% filter(method == "JTK")
+  jtk <- jtk$gene[jtk$q > 0.05]
+  d <- intersect(jtk, c(masigpro, splinetc, impulsede2))
+  d <- sample(d, 100)
+  for(i in d){
+    d <- rpkm.smr %>% filter(organ == org, gene == i)
+    g <- ggplot(d, aes(x = sequence, y = mean, colour = organism))
+    g <- g + geom_point() + geom_line() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd))
+    g <- g + ggtitle(paste(org, i, sep = ", ")) + xlab("Stage") + ylab("Expression (RPKM)")
+    g <- g + guides(colour=FALSE)
+    ggsave(g, file = paste0("./plots/exept_JTK/", i, ".eps"))
   }
 }
 
@@ -468,7 +481,7 @@ for(org in result$organ %>% unique){
   
   g <- ggplot(df, aes(x = threshold, y = value, fill = method))
   g <- g + geom_bar(stat = "identity", position = "dodge") + theme(legend.position="none")
-  g <- g + ylab("Persentage of \nsignificant genes (%)") + ggtitle(org)
+  g <- g + ylab("Percentage of \nsignificant genes (%)") + ggtitle(org)
   g
   ggsave(g, file = paste0("./plots/significant/", org, ".eps"), dpi = 300)
 }
