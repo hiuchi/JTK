@@ -332,7 +332,7 @@ g <- g + geom_roc(n.cuts = FALSE, linealpha = 0.9)
 g <- g + xlab("False positive rate") + ylab("True positive rate")
 g <- g + facet_grid(noise ~ N) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 g
-ggsave(g, file = Figure3.pdf", dpi = 300)
+ggsave(g, file = "Figure3.pdf", dpi = 300)
 
 #Figure 2D
 set.seed(8)
