@@ -111,7 +111,7 @@ calc.tau <- function(d){
 }
 
 #Figure 2C
-tp.range <- c(8, 16, 32, 64)
+tp.range <- c(4, 8, 16, 32)
 phi.range <- c(0.05, 0.1, 0.5, 1)
 result <- tibble(gene = NA, method = NA, timepoints = NA, noise = NA, value = NA)
 for(tp in tp.range){
@@ -137,6 +137,7 @@ for(tp in tp.range){
     data.mat <- data.smr %>% pivot_wider(id_cols = -c(sample, TP, sd), names_from = "label", values_from = "mean") %>% as.matrix
     rownames(data.mat) <- data.mat[,1]
     data.mat <- data.mat[,-1]
+    save(data, file = paste0("./data/fig2c/tp=", tp, "_phi=", phi, ".RData"))
     
     #JTK
     jtk.df <- apply(data.mat, 1, calc.tau)
@@ -147,44 +148,46 @@ for(tp in tp.range){
                                  value = as.numeric(jtk.df))
     
     for(df in c(3, 5, 7)){
-      #maSigPro
-      timepoints <- paste(rep((seq - 1) * 3, each = replicate.num), "h", sep = "")
-      header <- paste(timepoints, rep(1:replicate.num), sep = "-")
-      
-      # create design matrix
-      ctrl <- rep(c(1,0), each = length(header))
-      mat <- cbind(Time = as.numeric(sub("h","", timepoints)),
-                   Replicate = rep(1:(as.integer(tp) * 2), each = as.integer(replicate.num)),
-                   Control = ctrl,
-                   Treatment = as.numeric(ctrl == 0))
-      rownames(mat) <- colnames(data)
-      
-      # run differential expression analysis
-      NBp <- p.vector(data,design = make.design.matrix(mat, degree = df), counts = TRUE, Q = 1)
-      NBt <- T.fit(NBp, step.method = "backward")
-      masigpro.df <- NBt$sol[,c(1, 4)]
-      
-      result <- result %>% add_row(gene = str_sub(rownames(masigpro.df), start = 5) %>% as.numeric,
-                                   method = paste0("maSigPro_degree=", df),
-                                   timepoints = tp,
-                                   noise = phi,
-                                   value = masigpro.df$p.valor_TreatmentvsControl)
-      
-      #splineTC
-      design <- data.frame(row.names = colnames(data),
-                           "SampleName" = colnames(data),
-                           "Time" = rep(rep(seq, each = replicate.num), 2), 
-                           "Treatment" = rep(c("control", "case"), each = tp * replicate.num),
-                           "Replicate" = rep(1:replicate.num, tp * 2))
-      phenoData <- new("AnnotatedDataFrame", data = design)
-      d <- ExpressionSet(assayData = as.matrix(data), phenoData = phenoData)
-      diffExprs <- splineDiffExprs(eSetObject = d, df = df, reference = c("control", "case")[1], intercept = FALSE)
-      splineTC.df <- diffExprs[,c("P.Value", "adj.P.Val")]
-      result <- result %>% add_row(gene = str_sub(rownames(splineTC.df), start = 5) %>% as.numeric,
-                                   method = paste0("splineTC_df=", df),
-                                   timepoints = tp,
-                                   noise = phi,
-                                   value = splineTC.df$P.Value)
+      if(df < tp){
+        #maSigPro
+        timepoints <- paste(rep(seq * 3, each = replicate.num), "h", sep = "")
+        header <- paste(timepoints, rep(1:replicate.num), sep = "-")
+        
+        # create design matrix
+        ctrl <- rep(c(1,0), each = length(header))
+        mat <- cbind(Time = as.numeric(sub("h","", timepoints)),
+                     Replicate = rep(1:(as.integer(tp) * 2), each = as.integer(replicate.num)),
+                     Control = ctrl,
+                     Treatment = as.numeric(ctrl == 0))
+        rownames(mat) <- colnames(data)
+        
+        # run differential expression analysis
+        NBp <- p.vector(data,design = make.design.matrix(mat, degree = df), counts = TRUE, Q = 1)
+        NBt <- T.fit(NBp, step.method = "backward")
+        masigpro.df <- NBt$sol[,c(1, 4)]
+        
+        result <- result %>% add_row(gene = str_sub(rownames(masigpro.df), start = 5) %>% as.numeric,
+                                     method = paste0("maSigPro_degree=", df),
+                                     timepoints = tp,
+                                     noise = phi,
+                                     value = masigpro.df$p.valor_TreatmentvsControl)
+        
+        #splineTC
+        design <- data.frame(row.names = colnames(data),
+                             "SampleName" = colnames(data),
+                             "Time" = rep(rep(seq, each = replicate.num), 2), 
+                             "Treatment" = rep(c("control", "case"), each = tp * replicate.num),
+                             "Replicate" = rep(1:replicate.num, tp * 2))
+        phenoData <- new("AnnotatedDataFrame", data = design)
+        d <- ExpressionSet(assayData = as.matrix(data), phenoData = phenoData)
+        diffExprs <- splineDiffExprs(eSetObject = d, df = df, reference = c("control", "case")[1], intercept = FALSE)
+        splineTC.df <- diffExprs[,c("P.Value", "adj.P.Val")]
+        result <- result %>% add_row(gene = str_sub(rownames(splineTC.df), start = 5) %>% as.numeric,
+                                     method = paste0("splineTC_df=", df),
+                                     timepoints = tp,
+                                     noise = phi,
+                                     value = splineTC.df$P.Value)
+      }
     }
     
     #ImpulseDE2
@@ -197,16 +200,16 @@ for(tp in tp.range){
     # DEG analysis
     impulse.df <- NULL
     try(impulse.df <- runImpulseDE2(matCountData = data,
-                                dfAnnotation = design,
-                                boolCaseCtrl = TRUE,
-                                scaNProc = 4,
-                                scaQThres = 1,
-                                boolIdentifyTransients = TRUE))
+                                    dfAnnotation = design,
+                                    boolCaseCtrl = TRUE,
+                                    scaNProc = 4,
+                                    scaQThres = 1,
+                                    boolIdentifyTransients = TRUE))
     try(result <- result %>% add_row(gene = str_sub(impulse.df$dfImpulseDE2Results$Gene, start = 5) %>% as.numeric,
-                                 method = "ImpulseDE2",
-                                 timepoints = tp,
-                                 noise = phi,
-                                 value = impulse.df$dfImpulseDE2Results$p))
+                                     method = "ImpulseDE2",
+                                     timepoints = tp,
+                                     noise = phi,
+                                     value = impulse.df$dfImpulseDE2Results$p))
   }
 }
 result <- result %>% filter(!is.na(value))
@@ -219,7 +222,7 @@ g <- g + geom_roc(n.cuts = FALSE, linealpha = 0.9)
 g <- g + xlab("False positive rate") + ylab("True positive rate")
 g <- g + facet_grid(noise ~ timepoints) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 g
-ggsave(g, file = "Figure2C.pdf", dpi = 300)
+ggsave(g, file = "./plots/Figure2C.pdf", dpi = 300)
 
 #Figure 3
 set.seed(8)
@@ -250,6 +253,7 @@ for(replicate.num in replicate.num.range){
     data.mat <- data.smr %>% pivot_wider(id_cols = -c(sample, TP, sd), names_from = "label", values_from = "mean") %>% as.matrix
     rownames(data.mat) <- data.mat[,1]
     data.mat <- data.mat[,-1]
+    save(data, file = paste0("./data/fig3/n=", replicate.num, "_phi=", phi, ".RData"))
     
     #JTK
     jtk.df <- apply(data.mat, 1, calc.tau)
@@ -261,7 +265,7 @@ for(replicate.num in replicate.num.range){
     
     for(df in c(3, 5, 7)){
       #maSigPro
-      timepoints <- paste(rep((seq - 1) * 3, each = replicate.num), "h", sep = "")
+      timepoints <- paste(rep(seq * 3, each = replicate.num), "h", sep = "")
       header <- paste(timepoints, rep(1:replicate.num), sep = "-")
       
       # create design matrix
@@ -332,10 +336,11 @@ g <- g + geom_roc(n.cuts = FALSE, linealpha = 0.9)
 g <- g + xlab("False positive rate") + ylab("True positive rate")
 g <- g + facet_grid(noise ~ N) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 g
-ggsave(g, file = "Figure3.pdf", dpi = 300)
+ggsave(g, file = "./plots/Figure3.pdf", dpi = 300)
 
 #Figure 2D
 set.seed(8)
+
 #functions
 f1 <- function(){
   a <- rplcon(1, min, alpha)
@@ -385,9 +390,9 @@ f4 <- function(){
   }
   return(d)
 }
-t <- 16
 
-tp.range <- c(8, 16, 32, 64)
+t <- 16
+tp.range <- c(4, 8, 16, 32)
 phi.range <- c(0.05, 0.1, 0.5, 1)
 result <- tibble(gene = NA, method = NA, timepoints = NA, noise = NA, value = NA)
 for(tp in tp.range){
@@ -412,7 +417,8 @@ for(tp in tp.range){
     data.mat <- data.smr %>% pivot_wider(id_cols = -c(sample, TP, sd), names_from = "label", values_from = "mean") %>% as.matrix
     rownames(data.mat) <- data.mat[,1]
     data.mat <- data.mat[,-1]
-    
+    save(data, file = paste0("./data/fig2d/tp=", tp, "_phi=", phi, ".RData"))
+
     #JTK
     jtk.df <- apply(data.mat, 1, calc.tau)
     result <- result %>% add_row(gene = names(jtk.df) %>% as.numeric(),
@@ -422,43 +428,45 @@ for(tp in tp.range){
                                  value = as.numeric(jtk.df))
     
     for(df in c(3, 5, 7)){
-      #maSigPro
-      timepoints <- paste(rep((seq - 1) * 3, each = replicate.num), "h", sep = "")
-      header <- paste(timepoints, rep(1:replicate.num), sep = "-")
-      
-      # create design matrix
-      ctrl <- rep(c(1,0), each = length(header))
-      mat <- cbind(Time = as.numeric(sub("h","", timepoints)),
-                   Replicate = rep(1:(as.integer(tp) * 2), each = as.integer(replicate.num)),
-                   Control = ctrl,
-                   Treatment = as.numeric(ctrl == 0))
-      rownames(mat) <- colnames(data)
-      
-      # run differential expression analysis
-      NBp <- p.vector(data,design = make.design.matrix(mat, degree = df), counts = TRUE, Q = 1)
-      NBt <- T.fit(NBp, alfa = 1, step.method = "backward")
-      masigpro.df <- NBt$sol[,c(1, 4)]
-      result <- result %>% add_row(gene = str_sub(rownames(masigpro.df), start = 5) %>% as.numeric,
-                                   method = paste0("maSigPro_degree=", df),
-                                   timepoints = tp,
-                                   noise = phi,
-                                   value = masigpro.df$p.valor_TreatmentvsControl)
-      
-      #splineTC
-      design <- data.frame(row.names = colnames(data),
-                           "SampleName" = colnames(data),
-                           "Time" = rep(rep(seq, each = replicate.num), 2), 
-                           "Treatment" = rep(c("control", "case"), each = tp * replicate.num),
-                           "Replicate" = rep(1:replicate.num, tp * 2))
-      phenoData <- new("AnnotatedDataFrame", data = design)
-      d <- ExpressionSet(assayData = as.matrix(data), phenoData = phenoData)
-      diffExprs <- splineDiffExprs(eSetObject = d, df = df, reference = c("control", "case")[1], intercept = FALSE)
-      splineTC.df <- diffExprs[,c("P.Value", "adj.P.Val")]
-      result <- result %>% add_row(gene = str_sub(rownames(splineTC.df), start = 5) %>% as.numeric,
-                                   method = paste0("splineTC_df=", df),
-                                   timepoints = tp,
-                                   noise = phi,
-                                   value = splineTC.df$P.Value)
+      if(df < tp){
+        #maSigPro
+        timepoints <- paste(rep(seq * 3, each = replicate.num), "h", sep = "")
+        header <- paste(timepoints, rep(1:replicate.num), sep = "-")
+        
+        # create design matrix
+        ctrl <- rep(c(1,0), each = length(header))
+        mat <- cbind(Time = as.numeric(sub("h","", timepoints)),
+                     Replicate = rep(1:(as.integer(tp) * 2), each = as.integer(replicate.num)),
+                     Control = ctrl,
+                     Treatment = as.numeric(ctrl == 0))
+        rownames(mat) <- colnames(data)
+        
+        # run differential expression analysis
+        NBp <- p.vector(data,design = make.design.matrix(mat, degree = df), counts = TRUE, Q = 1)
+        NBt <- T.fit(NBp, alfa = 1, step.method = "backward")
+        masigpro.df <- NBt$sol[,c(1, 4)]
+        result <- result %>% add_row(gene = str_sub(rownames(masigpro.df), start = 5) %>% as.numeric,
+                                     method = paste0("maSigPro_degree=", df),
+                                     timepoints = tp,
+                                     noise = phi,
+                                     value = masigpro.df$p.valor_TreatmentvsControl)
+        
+        #splineTC
+        design <- data.frame(row.names = colnames(data),
+                             "SampleName" = colnames(data),
+                             "Time" = rep(rep(seq, each = replicate.num), 2), 
+                             "Treatment" = rep(c("control", "case"), each = tp * replicate.num),
+                             "Replicate" = rep(1:replicate.num, tp * 2))
+        phenoData <- new("AnnotatedDataFrame", data = design)
+        d <- ExpressionSet(assayData = as.matrix(data), phenoData = phenoData)
+        diffExprs <- splineDiffExprs(eSetObject = d, df = df, reference = c("control", "case")[1], intercept = FALSE)
+        splineTC.df <- diffExprs[,c("P.Value", "adj.P.Val")]
+        result <- result %>% add_row(gene = str_sub(rownames(splineTC.df), start = 5) %>% as.numeric,
+                                     method = paste0("splineTC_df=", df),
+                                     timepoints = tp,
+                                     noise = phi,
+                                     value = splineTC.df$P.Value)
+      }
     }
     
     #ImpulseDE2
@@ -493,4 +501,4 @@ g <- g + geom_roc(n.cuts = FALSE, linealpha = 0.9)
 g <- g + xlab("False positive rate") + ylab("True positive rate")
 g <- g + facet_grid(noise ~ timepoints) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 g
-ggsave(g, file = "Figure2D.pdf", dpi = 300)
+ggsave(g, file = "./plots/Figure2D.pdf", dpi = 300)
