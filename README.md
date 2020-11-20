@@ -7,9 +7,9 @@
 
 # Usage
 `set.seed(8)`<br>
-#functions and a parameter to calculate tau<br>
-trial <- 1000<br>
-calc.null.dist <- function(dummy, d){<br>
+`#functions and a parameter to calculate tau`<br>
+`trial <- 1000`<br>
+`calc.null.dist <- function(dummy, d){`<br>
   d <- sample(d, length(d))<br>
   seq1 <- d[1:(length(d) / 2)]<br>
   seq2 <- d[(length(d) / 2 + 1):length(d)]<br>
