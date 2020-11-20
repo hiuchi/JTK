@@ -33,10 +33,28 @@ calc.tau <- function(d){
   dist <- sapply(1:trial, calc.null.dist, d)
   return(c(tau = tau, p = sum(dist < tau) / trial))
 }
+```
 
+```
 #load the data
 load("data.RData")
+data
+#      control_TP0 control_TP1 control_TP2 control_TP3 control_TP4 control_TP5
+#gene1    88.33333         106    73.00000    57.00000    33.00000          30
+#gene2    36.66667          37    71.66667    81.33333    99.66667          79
+#      control_TP6 control_TP7 case_TP0 case_TP1 case_TP2 case_TP3 case_TP4
+#gene1    18.33333    17.66667 154.6667  81.0000 117.3333       65 60.33333
+#gene2   113.00000    83.66667 206.0000 188.3333 126.3333      129 58.33333
+#      case_TP5 case_TP6  case_TP7
+#gene1       24       21 17.666667
+#gene2       23        2  6.666667
+```
 
+```
 #calculate tau and p-value
 result <- apply(data, 1, calc.tau)
+result
+#        gene1      gene2
+#tau 0.8571429 -0.7142857
+#p   0.9980000  0.0050000
 ```
