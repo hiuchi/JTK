@@ -6,7 +6,7 @@
 [Figure 8](/Figure8.R)
 
 # Usage
-`set.seed(8)<br>
+`set.seed(8)`<br>
 #functions and a parameter to calculate tau<br>
 trial <- 1000<br>
 calc.null.dist <- function(dummy, d){<br>
@@ -37,4 +37,4 @@ calc.tau <- function(d){<br>
 load("data.RData")<br>
 
 #calculate tau and p-value<br>
-result <- apply(data, 1, calc.tau)<br>`
+result <- apply(data, 1, calc.tau)<br>
