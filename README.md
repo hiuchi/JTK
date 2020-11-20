@@ -51,6 +51,8 @@ data
 ```
 ![plot](https://github.com/hiuchi/JTK/files/5571911/plot.pdf)
 ![plot](https://github.com/hiuchi/JTK/issues/1#issue-747245572)
+
+[plot.pdf](https://github.com/hiuchi/JTK/files/5572009/plot.pdf)
 ```
 #calculate tau and p-value
 result <- apply(data, 1, calc.tau)
