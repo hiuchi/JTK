@@ -27,7 +27,6 @@ calc.tau <- function(d){
   for(i in 1:length(control.seq)) for(j in 1:(length(control.seq))) if(i < j)
     tau <- tau + (sign(control.seq[j] - control.seq[i]) * sign(case.seq[j] - case.seq[i]))
   tau <- tau / (length(control.seq) * (length(control.seq) - 1) / 2)
-
   dist <- sapply(1:trial, calc.null.dist, d)
   return(c(tau = tau, p = sum(dist < tau) / trial))
 }
