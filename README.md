@@ -7,7 +7,6 @@
 
 # Usage
 ```
-#Since the p-values are calculated by permutation test, it is better to set the seed for reproducibility.
 set.seed(8)
 #functions and a parameter to calculate tau
 trial <- 1000
