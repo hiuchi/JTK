@@ -50,6 +50,7 @@ data
 ##gene2       23        2  6.666667
 ```
 ![plot](https://user-images.githubusercontent.com/2022405/99774217-d96b5480-2b50-11eb-8243-ee6f146dd57e.png)
+<img src ="https://user-images.githubusercontent.com/2022405/99774217-d96b5480-2b50-11eb-8243-ee6f146dd57e.png" alt="plot" width="300">
 ```
 #calculate tau and p-value
 result <- apply(data, 1, calc.tau)
