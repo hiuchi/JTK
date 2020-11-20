@@ -46,7 +46,7 @@ data
 ##gene1       24       21 17.666667
 ##gene2       23        2  6.666667
 ```
-The data.RData contains two genes (control and case) with eight time points.
+The data.RData contains two genes with eight time points.
 <img src ="https://user-images.githubusercontent.com/2022405/99774217-d96b5480-2b50-11eb-8243-ee6f146dd57e.png" alt="plot" width="500">
 
 ```
