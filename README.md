@@ -14,7 +14,6 @@ calc.null.dist <- function(dummy, d){
   d <- sample(d, length(d))
   seq1 <- d[1:(length(d) / 2)]
   seq2 <- d[(length(d) / 2 + 1):length(d)]
-  
   tau <- 0
   for(i in 1:length(seq1)) for(j in 1:(length(seq1))) if(i < j)
     tau <- tau + (sign(seq1[j] - seq1[i]) * sign(seq2[j] - seq2[i]))
@@ -24,7 +23,6 @@ calc.null.dist <- function(dummy, d){
 calc.tau <- function(d){
   control.seq <- as.numeric(d)[(length(d) / 2 + 1):length(d)]
   case.seq <- as.numeric(d)[1:(length(d) / 2)]
-  
   tau <- 0
   for(i in 1:length(control.seq)) for(j in 1:(length(control.seq))) if(i < j)
     tau <- tau + (sign(control.seq[j] - control.seq[i]) * sign(case.seq[j] - case.seq[i]))
