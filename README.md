@@ -49,7 +49,7 @@ data
 ##gene1       24       21 17.666667
 ##gene2       23        2  6.666667
 ```
-
+![plot.pdf](https://github.com/hiuchi/JTK/files/5571911/plot.pdf)
 ```
 #calculate tau and p-value
 result <- apply(data, 1, calc.tau)
