@@ -6,6 +6,7 @@
 [Figure 8](/Figure8.R)
 
 # Usage
+First, we set random seed and define functions.
 ```
 set.seed(8)
 #functions and a parameter to calculate tau
