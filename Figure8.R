@@ -5,6 +5,8 @@ require(poweRlaw)
 require(ImpulseDE2)
 require(maSigPro)
 require(splineTimeR)
+require(limorhyde)
+require(data.table)
 require(plotROC)
 require(tictoc)
 theme_set(theme_bw(base_size = 20))
@@ -150,7 +152,6 @@ rownames(data.mat) <- data.mat[,1]
 data.mat <- data.mat[,-1]
 
 result <- tibble(method = NA, param = NA, reps = NA, time = NA)
-#result <- tibble(method = NA, param = NA, time = NA)
 for(rep in 1:3){
   #JTK
   tic()
@@ -161,7 +162,7 @@ for(rep in 1:3){
                                reps = rep,
                                time = tmp$toc - tmp$tic)
   
-  for(df in c(3, 5, 7)){
+  for(value in c(3, 5, 7)){
     #maSigPro
     timepoints <- paste(rep((seq - 1) * 3, each = replicate.num), "h", sep = "")
     header <- paste(timepoints, rep(1:replicate.num), sep = "-")
@@ -176,11 +177,11 @@ for(rep in 1:3){
     
     # run differential expression analysis
     tic()
-    NBp <- p.vector(data,design = make.design.matrix(mat, degree = df), counts = TRUE, Q = 1)
+    NBp <- p.vector(data,design = make.design.matrix(mat, degree = value), counts = TRUE, Q = 1)
     NBt <- T.fit(NBp, step.method = "backward")
     tmp <- toc()
     result <- result %>% add_row(method = "maSigPro",
-                                 param = df,
+                                 param = value,
                                  reps = rep,
                                  time = tmp$toc - tmp$tic)
     
@@ -193,10 +194,10 @@ for(rep in 1:3){
     phenoData <- new("AnnotatedDataFrame", data = design)
     d <- ExpressionSet(assayData = as.matrix(data), phenoData = phenoData)
     tic()
-    diffExprs <- splineDiffExprs(eSetObject = d, df = df, reference = c("control", "case")[1], intercept = FALSE)
+    diffExprs <- splineDiffExprs(eSetObject = d, df = value, reference = c("control", "case")[1], intercept = FALSE)
     tmp <- toc()
     result <- result %>% add_row(method = "splineTC",
-                                 param = df,
+                                 param = value,
                                  reps = rep,
                                  time = tmp$toc - tmp$tic)
   }
@@ -221,26 +222,41 @@ for(rep in 1:3){
                                param = NA,
                                reps = rep,
                                time = tmp$toc - tmp$tic)
+  
+  #LimoRhyde
+  sm <- data.frame(title = colnames(data),
+                   time = str_sub(str_split(colnames(data), pattern = "_", simplify = TRUE)[,2], 3, 3) %>% as.numeric(),
+                   cond = str_split(colnames(data), pattern = "_", simplify = TRUE)[,1])
+  sm <- cbind(sm, limorhyde(sm$time, 'time_'))
+  design <- model.matrix(~ cond + time_cos + time_sin, data = sm)
+  
+  tic()
+  fit <- lmFit(data, design)
+  fit <- eBayes(fit, trend = TRUE)
+  tmp <- toc()
+  result <- result %>% add_row(method = "LimoRhyde",
+                               param = NA,
+                               reps = rep,
+                               time = tmp$toc - tmp$tic)
 }
 
 result <- result %>% filter(!is.na(time))
-result$method <- factor(result$method, levels = c("JTK", "maSigPro", "splineTC", "ImpulseDE2"))
+result$method <- factor(result$method, levels = c("JTK", "maSigPro", "splineTC", "ImpulseDE2", "LimoRhyde"))
 result$param <- as.factor(result$param)
 save(result, file = "result.RData")
 
 result$label <- paste(result$method, result$param, sep = "_")
 df <- result %>% group_by(label) %>% summarise(elapsed_time = mean(time), sd = sd(time))
-df$label <- c("ImpulseDE2", "JTK", "maSigPro (dgree=3)", "maSigPro (dgree=5)", "maSigPro (dgree=7)",
+df$label <- c("ImpulseDE2", "JTK", "LimoRhyde", "maSigPro (dgree=3)", "maSigPro (dgree=5)", "maSigPro (dgree=7)",
               "splineTC (df=3)", "splineTC (df=5)", "splineTC (df=7)")
 df$label <- fct_relevel(df$label, "JTK", "maSigPro (dgree=3)", "maSigPro (dgree=5)", "maSigPro (dgree=7)",
-                        "splineTC (df=3)", "splineTC (df=5)", "splineTC (df=7)", "ImpulseDE2")
+                        "splineTC (df=3)", "splineTC (df=5)", "splineTC (df=7)", "ImpulseDE2", "LimoRhyde")
 
 theme_set(theme_bw(base_size = 20))
 g <- ggplot(df, aes(x = label, y = elapsed_time))
-g <- g + geom_point() + xlab(NULL) + ylab("Elapsed time (sec, log)")
+g <- g + geom_point(size = 2) + xlab(NULL) + ylab("Elapsed time (sec, log)")
 g <- g + geom_errorbar(aes(ymin = elapsed_time - sd, ymax = elapsed_time + sd))
-g <- g + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+g <- g + theme(axis.text.x = element_text(angle = 45, hjust = 1))
 g <- g + scale_y_log10()
 g
-ggsave(g, file = "Figure6.eps", dpi = 300)
-
+ggsave(g, file = "time.pdf", dpi = 300)
