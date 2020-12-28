@@ -7,38 +7,4 @@ gunzip Mus_musculus.GRCm38.dna.toplevel.fa.gz
 wget ftp://ftp.ensembl.org/pub/release-102/gtf/mus_musculus//Mus_musculus.GRCm38.102.gtf.gz
 gunzip Mus_musculus.GRCm38.102.gtf.gz
 
-#generating genome indexes
-STAR --runMode genomeGenerate \
-	--runThreadN 64 \
-	--genomeDir STAR_index \
-	--genomeFastaFiles Mus_musculus.GRCm38.dna.toplevel.fa \
-	--sjdbGTFfile Mus_musculus.GRCm38.102.gtf \
-	--limitGenomeGenerateRAM 53524373088
-
-rsem-prepare-reference --gtf Mus_musculus.GRCm38.102.gtf \
-	-p 64 \
-	Mus_musculus.GRCm38.dna.toplevel.fa \
-	./RSEM_index/RSEM_index
-
-#mapping and calculating TPM
-files=`find ./files -name \*.gz | cut -c 9-27`
-
-for file in ${files[@]};
-do
-STAR --runThreadN 64 \
-	--genomeDir STAR_index \
-	--readFilesCommand gunzip -c \
-	--readFilesIn ./files/${file} \
-	--quantMode TranscriptomeSAM \
-	--outSAMtype BAM SortedByCoordinate \
-	--outFileNamePrefix ./STAR_result/${file}.
-
-rsem-calculate-expression -p 64 \
-	--alignments \
-	--append-names \
-	--no-bam-output \
-	--bam \
-	./STAR_result/${file}.Aligned.toTranscriptome.out.bam \
-	./RSEM_index/RSEM_index \
-	./results/${file}
-done
+qsub mouse.sh
