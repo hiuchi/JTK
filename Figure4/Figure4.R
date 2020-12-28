@@ -5,14 +5,16 @@ require(snowfall)
 require(maSigPro)
 require(splineTimeR)
 require(ImpulseDE2)
+require(limorhyde)
 require(stringr)
+require(data.table)
 require(plotROC)
 theme_set(theme_bw(base_size = 20))
 set.seed(8)
 
 #parameters
 trial <- 1000
-file <- "./data/30M_3rep_4TP_contr.txt"
+file <- "~/Research/JTK/201202_spies/data/30M_3rep_4TP_contr.txt"
 
 calc.JTK <- function(d){
     control.seq <- as.numeric(d)[(length(d) / 2 + 1):length(d)]
@@ -147,16 +149,30 @@ maSigPro <- tibble(gene = str_sub(rownames(masigpro.df), start = 6) %>% as.numer
                    method = "maSigPro",
                    value = masigpro.df$`p-value`)
 
-result <- rbind(JTK, maSigPro, splineTC, ImpulseDE2)
+#LimoRhyde
+sm <- data.frame(title = colnames(inData),
+                 time = str_sub(str_split(colnames(inData), pattern = "_", simplify = TRUE)[,2], 1, 1) %>% as.numeric(),
+                 cond = str_split(colnames(inData), pattern = "_", simplify = TRUE)[,1])
+sm <- cbind(sm, limorhyde(sm$time, 'time_'))
+
+design <- model.matrix(~ cond + time_cos + time_sin, data = sm)
+fit <- lmFit(inData, design)
+fit <- eBayes(fit, trend = TRUE)
+deLimma <- data.table(topTable(fit, coef = 2, number = Inf), keep.rownames = TRUE)
+LimoRhyde <- tibble(gene = str_sub(deLimma$rn, start = 6) %>% as.numeric,
+                    method = "LimoRhyde",
+                    value = deLimma$P.Value)
+
+result <- rbind(JTK, maSigPro, splineTC, ImpulseDE2, LimoRhyde)
 
 degs <- read.table("./DEG_IDs.txt")
 ids <- read.table("./SIM_IDs.txt")
 find.deg <- function(gene.name) return(as.character(ids$V3[which(ids$V2 == gene.name)]))
 deg.ids <- sapply(as.character(degs$V1), find.deg)
 
-result$DEG <- TRUE
-for(i in 1:nrow(result)) if(result$gene[i] > 1200) result$DEG[i] <- FALSE
-result$method <- factor(result$method, levels = c("JTK", "maSigPro", "splineTC", "ImpulseDE2"))
+result$DEG <- 1
+for(i in 1:nrow(result)) if(result$gene[i] > 1200) result$DEG[i] <- 0
+result$method <- factor(result$method, levels = c("JTK", "maSigPro", "splineTC", "ImpulseDE2", "LimoRhyde"))
 save(result, file = "result.RData")
 
 result.roc <- tibble(D = result$DEG, method = result$method, value = 1 - result$value)
@@ -165,115 +181,4 @@ g <- g + geom_roc(n.cuts = FALSE)
 g <- g + xlab("False positive rate") + ylab("True positive rate")
 g <- g + theme(legend.title = element_text(size=15),legend.text = element_text(size=15)) 
 g
-ggsave(g, file = ".Figure4B.eps")
-
-#plots
-theme_set(theme_bw(base_size = 15))
-# parse parameters
-par <- strsplit(basename(file), "_")[[1]]
-repl <- as.numeric(strsplit(par[2], "rep")[[1]])
-TP <- as.numeric(strsplit(par[3], "TP")[[1]])
-time <- ((1:TP) - 1) * 3
-header <- paste(rep(((1:TP) - 1) * 3, each = repl), "h-", rep(1:repl), sep = "")
-
-# read data
-contr <- read.table(file, header = T, stringsAsFactors = F)
-treat <- read.table(sub("contr", "treat", file), header = T, stringsAsFactors = F)
-rownames(treat) <- rownames(contr)
-
-# merge data into 1 data.framea
-d <- cbind(contr, treat)
-type <- c("control", "case")
-colnames(d) <- paste(rep(type, each = length(header)), rep(header, 2), sep = "_")
-d <- as.matrix(d[rowSums(d) > 0,]) # otherwise crash
-
-data <- as.data.frame(d)
-data$gene <- rownames(data) %>% str_sub(start = 6) %>% as.numeric
-data <- data %>% pivot_longer(cols = 1:(ncol(data) - 1), names_to = "sample", values_to = "expression")
-design <- str_split(data$sample, "_", simplify = TRUE)
-data$cc <- design[,1]
-data$TP <- str_split(design[,2], "-", simplify = TRUE)[,1] %>% str_sub(end = -2) %>% as.numeric
-data$rep <- str_split(design[,2], "-", simplify = TRUE)[,2]
-data$sample <- str_split(data$sample, "-", simplify = TRUE)[,1]
-data <- data %>% group_by(gene, cc, TP) %>% summarise(mean = mean(expression), sd = sd(expression))
-data$cc <- factor(data$cc, levels = c("control", "case"))
-
-jtk <- result %>% filter(method == "JTK")
-jtk <- jtk %>% arrange(gene)
-masigpro <- result %>% filter(method == "maSigPro")
-masigpro$value <- p.adjust(masigpro$value, method = "BH")
-masigpro <- masigpro %>% arrange(gene)
-splinetc <- result %>% filter(method == "splineTC")
-splinetc$value <- p.adjust(splinetc$value, method = "BH")
-splinetc <- splinetc %>% arrange(gene)
-impulsede2 <- result %>% filter(method == "ImpulseDE2")
-impulsede2$value <- p.adjust(impulsede2$value, method = "BH")
-
-genes <- jtk %>% filter(gene <= 1200, value >= 0.8)
-genes <- as.vector(genes$gene)
-for(i in genes){
-    jtk.value <- jtk %>% filter(gene == i)
-    masigpro.value <- masigpro %>% filter(gene == i)
-    splinetc.value <- splinetc %>% filter(gene == i)
-    impulsede2.value <- impulsede2 %>% filter(gene == i)
-    title <- paste0("JTK's q=", jtk.value$value %>% signif(2),
-                    ", maSigPro's q=", masigpro.value$value %>% signif(2),
-                    ",\nsplineTC's q=",  splinetc.value$value %>% signif(2),
-                    ", ImpulseDE2's q=", impulsede2.value$value %>% signif(2))
-    d <- data %>% filter(gene == i)
-    g <- ggplot(d, aes(x = TP, y = mean, colour = cc))
-    g <- g + geom_point() + ggtitle(title) + xlab("Time (h)") + ylab("Counts")
-    g <- g + geom_line(data = d, aes(x = TP, y = mean)) + guides(colour=FALSE) 
-    g <- g + ylim(0, NA)+ geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.5)
-    g <- g + annotate("text", label = title, x = 2.5, y = 10) 
-    ggsave(g, file = paste0("./plots/gene", i, ".pdf"))
-}
-
-selected.genes <- c(682, 684, 783, 792, 1171, 1174)
-d$cc <- factor(d$cc, levels = c("control", "case"))
-for(i in selected.genes){
-    jtk.value <- jtk %>% filter(gene == i)
-    masigpro.value <- masigpro %>% filter(gene == i)
-    splinetc.value <- splinetc %>% filter(gene == i)
-    impulsede2.value <- impulsede2 %>% filter(gene == i)
-    title <- paste0("JTK's q=", jtk.value$value %>% signif(2),
-                    "\nmaSigPro's q=", masigpro.value$value %>% signif(2),
-                    "\nsplineTC's q=",  splinetc.value$value %>% signif(2),
-                    "\nImpulseDE2's q=", impulsede2.value$value %>% signif(2))
-    d <- data %>% filter(gene == i)
-    g <- ggplot(d, aes(x = TP, y = mean, colour = cc))
-    g <- g + geom_point() + xlab("Time (h)") + ylab("Counts")
-    g <- g + geom_line(data = d, aes(x = TP, y = mean))# + guides(colour=FALSE) 
-    g <- g + ylim(0, NA)+ geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.5)
-    g <- g + annotate("text", label = title, x = 7.5, y = 400) 
-    ggsave(g, file = paste0("./examples/gene", i, ".pdf"))
-}
-
-jtk.value <- jtk %>% filter(gene %in% selected.genes)
-masigpro.value <- masigpro %>% filter(gene %in% selected.genes)
-splinetc.value <- splinetc %>% filter(gene %in% selected.genes)
-impulsede2.value <- impulsede2 %>% filter(gene %in% selected.genes)
-title <- paste0("JTK's q=", jtk.value$value %>% signif(2),
-                "\nmaSigPro's q=", masigpro.value$value %>% signif(2),
-                "\nsplineTC's q=",  splinetc.value$value %>% signif(2),
-                "\nImpulseDE2's q=", impulsede2.value$value %>% signif(2))
-d <- data %>% filter(gene %in% selected.genes)
-d$description <- c(rep("Up early slow", each = 16),
-                   rep("Down early slow", each = 16),
-                   rep("Mixed slow", each = 16))
-d$gene <- rep(c(1, 2), each = 8)
-
-text.df <- tibble(gene = rep(c(1, 2), 3),
-                  description = rep(c("Up early slow", "Down early slow", "Mixed slow"), each = 2),
-                  text = title, cc = NA)
-text.df$description <- factor(text.df$description,
-                              levels = c("Up early slow", "Down early slow", "Mixed slow"))
-text.df$cc <- factor(text.df$cc, levels = c("control", "case"))
-g <- ggplot(d, aes(x = TP, y = mean, colour = cc))
-g <- g + geom_point() + xlab("Time (h)") + ylab("Counts")
-g <- g + geom_line(data = d, aes(x = TP, y = mean))# + guides(colour=FALSE) 
-g <- g + ylim(0, NA)+ geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.5)
-g <- g + geom_text(data = text.df, mapping = aes(x = 5, y = 600, label = text))
-g <- g + facet_grid(gene ~ description)
-g
-ggsave(g, file = "Figure4A.eps", dpi = 300)
+ggsave(g, file = paste0("./4TP.pdf"))
