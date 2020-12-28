@@ -5,6 +5,9 @@ require(poweRlaw)
 require(ImpulseDE2)
 require(maSigPro)
 require(splineTimeR)
+require(limma)
+require(limorhyde)
+require(data.table)
 require(plotROC)
 theme_set(theme_bw(base_size = 20))
 set.seed(8)
@@ -197,6 +200,7 @@ for(tp in tp.range){
                          "Time" = rep(rep(1:t, each = replicate.num), 2),
                          "Batch" = rep("B_NULL", ncol(data)), 
                          row.names = colnames(data))
+    
     # DEG analysis
     impulse.df <- NULL
     try(impulse.df <- runImpulseDE2(matCountData = data,
@@ -210,13 +214,29 @@ for(tp in tp.range){
                                      timepoints = tp,
                                      noise = phi,
                                      value = impulse.df$dfImpulseDE2Results$p))
+    
+    #LimoRhyde
+    sm <- data.frame(title = colnames(data),
+                     time = as.numeric(str_sub(str_split(colnames(data), pattern = "_", simplify = TRUE)[,2], 3)),
+                     cond = str_split(colnames(data), pattern = "_", simplify = TRUE)[,1])
+    sm <- cbind(sm, limorhyde(sm$time, 'time_'))
+    
+    design <- model.matrix(~ cond + time_cos + time_sin, data = sm)
+    fit <- lmFit(data, design)
+    fit <- eBayes(fit, trend = TRUE)
+    deLimma <- data.table(topTable(fit, coef = 2, number = Inf), keep.rownames = TRUE)
+    result <- result %>% add_row(gene = deLimma$rn %>% str_sub(5) %>% as.numeric(),
+                                 method = "LimoRhyde",
+                                 timepoints = tp,
+                                 noise = phi,
+                                 value = deLimma$P.Value)
   }
 }
 result <- result %>% filter(!is.na(value))
 result$DEG <- 0
 result$DEG[result$gene <= gene.num] <- 1
 result$method <- factor(result$method,
-                        levels = c("JTK", "maSigPro_degree=3", "maSigPro_degree=5", "maSigPro_degree=7", "splineTC_df=3", "splineTC_df=5", "splineTC_df=7", "ImpulseDE2"))
+                        levels = c("JTK", "maSigPro_degree=3", "maSigPro_degree=5", "maSigPro_degree=7", "splineTC_df=3", "splineTC_df=5", "splineTC_df=7", "ImpulseDE2", "LimoRhyde"))
 g <- ggplot(result, aes(d = DEG, m = 1 - value, colour = method))
 g <- g + geom_roc(n.cuts = FALSE, linealpha = 0.9)
 g <- g + xlab("False positive rate") + ylab("True positive rate")
@@ -324,13 +344,29 @@ for(replicate.num in replicate.num.range){
                                      N = replicate.num,
                                      noise = phi,
                                      value = impulse.df$dfImpulseDE2Results$p))
+    
+    #LimoRhyde
+    sm <- data.frame(title = colnames(data),
+                     time = as.numeric(str_sub(str_split(colnames(data), pattern = "_", simplify = TRUE)[,2], 3)),
+                     cond = str_split(colnames(data), pattern = "_", simplify = TRUE)[,1])
+    sm <- cbind(sm, limorhyde(sm$time, 'time_'))
+    
+    design <- model.matrix(~ cond + time_cos + time_sin, data = sm)
+    fit <- lmFit(data, design)
+    fit <- eBayes(fit, trend = TRUE)
+    deLimma <- data.table(topTable(fit, coef = 2, number = Inf), keep.rownames = TRUE)
+    result <- result %>% add_row(gene = deLimma$rn %>% str_sub(5) %>% as.numeric(),
+                                 method = "LimoRhyde",
+                                 N = replicate.num,
+                                 noise = phi,
+                                 value = deLimma$P.Value)
   }
 }
 result <- result %>% filter(!is.na(value))
 result$DEG <- 0
 result$DEG[result$gene <= gene.num] <- 1
 result$method <- factor(result$method,
-                        levels = c("JTK", "maSigPro_degree=3", "maSigPro_degree=5", "maSigPro_degree=7", "splineTC_df=3", "splineTC_df=5", "splineTC_df=7", "ImpulseDE2"))
+                        levels = c("JTK", "maSigPro_degree=3", "maSigPro_degree=5", "maSigPro_degree=7", "splineTC_df=3", "splineTC_df=5", "splineTC_df=7", "ImpulseDE2", "LimoRhyde"))
 g <- ggplot(result, aes(d = DEG, m = 1 - value, colour = method))
 g <- g + geom_roc(n.cuts = FALSE, linealpha = 0.9)
 g <- g + xlab("False positive rate") + ylab("True positive rate")
@@ -489,16 +525,33 @@ for(tp in tp.range){
                                      timepoints = tp,
                                      noise = phi,
                                      value = impulse.df$dfImpulseDE2Results$p))
+    
+    #LimoRhyde
+    sm <- data.frame(title = colnames(data),
+                     time = as.numeric(str_sub(str_split(colnames(data), pattern = "_", simplify = TRUE)[,2], 3)),
+                     cond = str_split(colnames(data), pattern = "_", simplify = TRUE)[,1])
+    sm <- cbind(sm, limorhyde(sm$time, 'time_'))
+    
+    design <- model.matrix(~ cond + time_cos + time_sin, data = sm)
+    fit <- lmFit(data, design)
+    fit <- eBayes(fit, trend = TRUE)
+    deLimma <- data.table(topTable(fit, coef = 2, number = Inf), keep.rownames = TRUE)
+    result <- result %>% add_row(gene = deLimma$rn %>% str_sub(5) %>% as.numeric(),
+                                 method = "LimoRhyde",
+                                 timepoints = tp,
+                                 noise = phi,
+                                 value = deLimma$P.Value)
   }
 }
 result <- result %>% filter(!is.na(value))
 result$DEG <- 0
 result$DEG[result$gene <= gene.num] <- 1
 result$method <- factor(result$method,
-                        levels = c("JTK", "maSigPro_degree=3", "maSigPro_degree=5", "maSigPro_degree=7", "splineTC_df=3", "splineTC_df=5", "splineTC_df=7", "ImpulseDE2"))
+                        levels = c("JTK", "maSigPro_degree=3", "maSigPro_degree=5", "maSigPro_degree=7", "splineTC_df=3", "splineTC_df=5", "splineTC_df=7", "ImpulseDE2", "LimoRhyde"))
 g <- ggplot(result, aes(d = DEG, m = 1 - value, colour = method))
 g <- g + geom_roc(n.cuts = FALSE, linealpha = 0.9)
 g <- g + xlab("False positive rate") + ylab("True positive rate")
 g <- g + facet_grid(noise ~ timepoints) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 g
 ggsave(g, file = "./plots/Figure2D.pdf", dpi = 300)
+
