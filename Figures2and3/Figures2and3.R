@@ -1,5 +1,7 @@
 #This is the source code to reproduce Figures 2 and 3.
 
+setwd("~/Research/JTK/210204_short/")
+
 require(tidyverse)
 require(poweRlaw)
 require(ImpulseDE2)
@@ -8,6 +10,7 @@ require(splineTimeR)
 require(limma)
 require(limorhyde)
 require(data.table)
+require(foreach)
 require(plotROC)
 theme_set(theme_bw(base_size = 20))
 set.seed(8)
@@ -18,6 +21,8 @@ replicate.num <- 3
 alpha <- 2.5
 min <- 30
 t <- 16
+qvalRhyCutoff <- 0.15
+qvalDrCutoff <- 0.05
 
 #functions for simulation
 f1 <- function(){
@@ -219,13 +224,44 @@ for(tp in tp.range){
     sm <- data.frame(title = colnames(data),
                      time = as.numeric(str_sub(str_split(colnames(data), pattern = "_", simplify = TRUE)[,2], 3)),
                      cond = str_split(colnames(data), pattern = "_", simplify = TRUE)[,1])
-    sm <- cbind(sm, limorhyde(sm$time, 'time_'))
+    sm <- cbind(sm, limorhyde(sm$time, 'time_')) %>% as.data.table
     
+    #Identify rhythmic genes
+    rhyLimma <- foreach(condNow = unique(sm$cond), .combine = rbind) %do% {
+      design <- model.matrix(~ time_cos + time_sin, data = sm[cond == condNow])
+      fit <- lmFit(data[, sm$cond == condNow], design)
+      fit <- eBayes(fit, trend = TRUE)
+      rhyNow <- data.table(topTable(fit, coef = 2:3, number = Inf), keep.rownames = TRUE)
+      setnames(rhyNow, 'rn', 'geneId')
+      rhyNow[, cond := condNow]
+    }
+    rhyLimmaSummary <- rhyLimma[, .(P.Value = min(P.Value)), by = geneId]
+    rhyLimmaSummary[, adj.P.Val := p.adjust(P.Value, method = 'BH')]
+    
+    #Identify differentially rhythmic genes
+    design <- model.matrix(~ cond * (time_cos + time_sin), data = sm)
+    fit <- lmFit(data, design)
+    fit <- eBayes(fit, trend = TRUE)
+    drLimma <- data.table(topTable(fit, coef = 5:6, number = Inf), keep.rownames = TRUE)
+    setnames(drLimma, 'rn', 'geneId')
+    drLimma <- drLimma[geneId %in% rhyLimmaSummary[adj.P.Val <= qvalRhyCutoff]$geneId]
+    drLimma[, adj.P.Val := p.adjust(P.Value, method = 'BH')]
+    drLimma <- drLimma[drLimma$adj.P.Val <= qvalDrCutoff]
+    result <- result %>% add_row(gene = str_sub(drLimma$geneId, start = 5) %>% as.numeric(),
+                                 method = "LimoRhyde",
+                                 timepoints = tp,
+                                 noise = phi,
+                                 value = drLimma$P.Value)
+    
+    #Identify differentially expressed genes
     design <- model.matrix(~ cond + time_cos + time_sin, data = sm)
     fit <- lmFit(data, design)
     fit <- eBayes(fit, trend = TRUE)
     deLimma <- data.table(topTable(fit, coef = 2, number = Inf), keep.rownames = TRUE)
-    result <- result %>% add_row(gene = deLimma$rn %>% str_sub(5) %>% as.numeric(),
+    setnames(deLimma, 'rn', 'geneId')
+    deLimma <- deLimma[!(geneId %in% drLimma[adj.P.Val <= qvalDrCutoff]$geneId)]
+    deLimma[, adj.P.Val := p.adjust(P.Value, method = 'BH')]
+    result <- result %>% add_row(gene = str_sub(deLimma$geneId, start = 5) %>% as.numeric(),
                                  method = "LimoRhyde",
                                  timepoints = tp,
                                  noise = phi,
@@ -349,13 +385,44 @@ for(replicate.num in replicate.num.range){
     sm <- data.frame(title = colnames(data),
                      time = as.numeric(str_sub(str_split(colnames(data), pattern = "_", simplify = TRUE)[,2], 3)),
                      cond = str_split(colnames(data), pattern = "_", simplify = TRUE)[,1])
-    sm <- cbind(sm, limorhyde(sm$time, 'time_'))
+    sm <- cbind(sm, limorhyde(sm$time, 'time_')) %>% as.data.table
     
+    #Identify rhythmic genes
+    rhyLimma <- foreach(condNow = unique(sm$cond), .combine = rbind) %do% {
+      design <- model.matrix(~ time_cos + time_sin, data = sm[cond == condNow])
+      fit <- lmFit(data[, sm$cond == condNow], design)
+      fit <- eBayes(fit, trend = TRUE)
+      rhyNow <- data.table(topTable(fit, coef = 2:3, number = Inf), keep.rownames = TRUE)
+      setnames(rhyNow, 'rn', 'geneId')
+      rhyNow[, cond := condNow]
+    }
+    rhyLimmaSummary <- rhyLimma[, .(P.Value = min(P.Value)), by = geneId]
+    rhyLimmaSummary[, adj.P.Val := p.adjust(P.Value, method = 'BH')]
+    
+    #Identify differentially rhythmic genes
+    design <- model.matrix(~ cond * (time_cos + time_sin), data = sm)
+    fit <- lmFit(data, design)
+    fit <- eBayes(fit, trend = TRUE)
+    drLimma <- data.table(topTable(fit, coef = 5:6, number = Inf), keep.rownames = TRUE)
+    setnames(drLimma, 'rn', 'geneId')
+    drLimma <- drLimma[geneId %in% rhyLimmaSummary[adj.P.Val <= qvalRhyCutoff]$geneId]
+    drLimma[, adj.P.Val := p.adjust(P.Value, method = 'BH')]
+    drLimma <- drLimma[drLimma$adj.P.Val <= qvalDrCutoff]
+    result <- result %>% add_row(gene = str_sub(drLimma$geneId, start = 5) %>% as.numeric(),
+                                 method = "LimoRhyde",
+                                 N = replicate.num,
+                                 noise = phi,
+                                 value = drLimma$P.Value)
+    
+    #Identify differentially expressed genes
     design <- model.matrix(~ cond + time_cos + time_sin, data = sm)
     fit <- lmFit(data, design)
     fit <- eBayes(fit, trend = TRUE)
     deLimma <- data.table(topTable(fit, coef = 2, number = Inf), keep.rownames = TRUE)
-    result <- result %>% add_row(gene = deLimma$rn %>% str_sub(5) %>% as.numeric(),
+    setnames(deLimma, 'rn', 'geneId')
+    deLimma <- deLimma[!(geneId %in% drLimma[adj.P.Val <= qvalDrCutoff]$geneId)]
+    deLimma[, adj.P.Val := p.adjust(P.Value, method = 'BH')]
+    result <- result %>% add_row(gene = str_sub(deLimma$geneId, start = 5) %>% as.numeric(),
                                  method = "LimoRhyde",
                                  N = replicate.num,
                                  noise = phi,
@@ -526,17 +593,69 @@ for(tp in tp.range){
                                      noise = phi,
                                      value = impulse.df$dfImpulseDE2Results$p))
     
+    #ImpulseDE2
+    # specify experimental design
+    design <- data.frame("Sample" = colnames(data),
+                         "Condition" = rep(c("control", "case"), each = tp * replicate.num),
+                         "Time" = rep(rep(1:tp, each = replicate.num), 2),
+                         "Batch" = rep("B_NULL", ncol(data)), 
+                         row.names = colnames(data))
+    # DEG analysis
+    impulse.df <- NULL
+    try(impulse.df <- runImpulseDE2(matCountData = data,
+                                    dfAnnotation = design,
+                                    boolCaseCtrl = TRUE,
+                                    scaNProc = 4,
+                                    scaQThres = 1,
+                                    boolIdentifyTransients = TRUE))
+    try(result <- result %>% add_row(gene = str_sub(impulse.df$dfImpulseDE2Results$Gene, start = 5) %>% as.numeric,
+                                     method = "ImpulseDE2",
+                                     timepoints = tp,
+                                     noise = phi,
+                                     value = impulse.df$dfImpulseDE2Results$p))
+    
     #LimoRhyde
     sm <- data.frame(title = colnames(data),
                      time = as.numeric(str_sub(str_split(colnames(data), pattern = "_", simplify = TRUE)[,2], 3)),
                      cond = str_split(colnames(data), pattern = "_", simplify = TRUE)[,1])
-    sm <- cbind(sm, limorhyde(sm$time, 'time_'))
+    sm <- cbind(sm, limorhyde(sm$time, 'time_')) %>% as.data.table
     
+    #Identify rhythmic genes
+    rhyLimma <- foreach(condNow = unique(sm$cond), .combine = rbind) %do% {
+      design <- model.matrix(~ time_cos + time_sin, data = sm[cond == condNow])
+      fit <- lmFit(data[, sm$cond == condNow], design)
+      fit <- eBayes(fit, trend = TRUE)
+      rhyNow <- data.table(topTable(fit, coef = 2:3, number = Inf), keep.rownames = TRUE)
+      setnames(rhyNow, 'rn', 'geneId')
+      rhyNow[, cond := condNow]
+    }
+    rhyLimmaSummary <- rhyLimma[, .(P.Value = min(P.Value)), by = geneId]
+    rhyLimmaSummary[, adj.P.Val := p.adjust(P.Value, method = 'BH')]
+    
+    #Identify differentially rhythmic genes
+    design <- model.matrix(~ cond * (time_cos + time_sin), data = sm)
+    fit <- lmFit(data, design)
+    fit <- eBayes(fit, trend = TRUE)
+    drLimma <- data.table(topTable(fit, coef = 5:6, number = Inf), keep.rownames = TRUE)
+    setnames(drLimma, 'rn', 'geneId')
+    drLimma <- drLimma[geneId %in% rhyLimmaSummary[adj.P.Val <= qvalRhyCutoff]$geneId]
+    drLimma[, adj.P.Val := p.adjust(P.Value, method = 'BH')]
+    drLimma <- drLimma[drLimma$adj.P.Val <= qvalDrCutoff]
+    result <- result %>% add_row(gene = str_sub(drLimma$geneId, start = 5) %>% as.numeric(),
+                                 method = "LimoRhyde",
+                                 timepoints = tp,
+                                 noise = phi,
+                                 value = drLimma$P.Value)
+    
+    #Identify differentially expressed genes
     design <- model.matrix(~ cond + time_cos + time_sin, data = sm)
     fit <- lmFit(data, design)
     fit <- eBayes(fit, trend = TRUE)
     deLimma <- data.table(topTable(fit, coef = 2, number = Inf), keep.rownames = TRUE)
-    result <- result %>% add_row(gene = deLimma$rn %>% str_sub(5) %>% as.numeric(),
+    setnames(deLimma, 'rn', 'geneId')
+    deLimma <- deLimma[!(geneId %in% drLimma[adj.P.Val <= qvalDrCutoff]$geneId)]
+    deLimma[, adj.P.Val := p.adjust(P.Value, method = 'BH')]
+    result <- result %>% add_row(gene = str_sub(deLimma$geneId, start = 5) %>% as.numeric(),
                                  method = "LimoRhyde",
                                  timepoints = tp,
                                  noise = phi,
@@ -554,4 +673,3 @@ g <- g + xlab("False positive rate") + ylab("True positive rate")
 g <- g + facet_grid(noise ~ timepoints) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 g
 ggsave(g, file = "./plots/Figure2D.pdf", dpi = 300)
-
