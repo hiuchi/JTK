@@ -1,6 +1,7 @@
 # The source codes and datasets of Iuchi and Hamada, 2021
 
 [Figures 2 and 3](/Figures2and3/)  
+[Figure 4](/Figure4.R) 
 [Figure 5](/Figure5/)  
 [Figures 6 and 7](/Figures6and7/)  
 [Figure 8](/Figure8.R)
