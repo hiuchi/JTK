@@ -7,6 +7,7 @@ require(maSigPro)
 require(splineTimeR)
 require(limorhyde)
 require(data.table)
+require(foreach)
 require(plotROC)
 require(tictoc)
 theme_set(theme_bw(base_size = 20))
@@ -21,6 +22,7 @@ tp <- 8
 t <- tp
 phi <- 0.05
 trial <- 1000
+qvalRhyCutoff <- 0.15
 
 #functions for simulation
 f1 <- function(){
@@ -164,6 +166,7 @@ for(rep in 1:3){
   
   for(value in c(3, 5, 7)){
     #maSigPro
+    tic()
     timepoints <- paste(rep((seq - 1) * 3, each = replicate.num), "h", sep = "")
     header <- paste(timepoints, rep(1:replicate.num), sep = "-")
     
@@ -176,7 +179,6 @@ for(rep in 1:3){
     rownames(mat) <- colnames(data)
     
     # run differential expression analysis
-    tic()
     NBp <- p.vector(data,design = make.design.matrix(mat, degree = value), counts = TRUE, Q = 1)
     NBt <- T.fit(NBp, step.method = "backward")
     tmp <- toc()
@@ -204,13 +206,13 @@ for(rep in 1:3){
   
   #ImpulseDE2
   # specify experimental design
+  tic()
   design <- data.frame("Sample" = colnames(data),
                        "Condition" = rep(c("control", "case"), each = t * replicate.num),
                        "Time" = rep(rep(1:t, each = replicate.num), 2),
                        "Batch" = rep("B_NULL", ncol(data)), 
                        row.names = colnames(data))
   # DEG analysis
-  tic()
   runImpulseDE2(matCountData = data,
                 dfAnnotation = design,
                 boolCaseCtrl = TRUE,
@@ -224,15 +226,44 @@ for(rep in 1:3){
                                time = tmp$toc - tmp$tic)
   
   #LimoRhyde
-  sm <- data.frame(title = colnames(data),
-                   time = str_sub(str_split(colnames(data), pattern = "_", simplify = TRUE)[,2], 3, 3) %>% as.numeric(),
-                   cond = str_split(colnames(data), pattern = "_", simplify = TRUE)[,1])
-  sm <- cbind(sm, limorhyde(sm$time, 'time_'))
-  design <- model.matrix(~ cond + time_cos + time_sin, data = sm)
-  
+  qvalRhyCutoff <- 0.15
+  qvalDrCutoff <- 0.05
   tic()
+  sm <- data.frame(title = colnames(data),
+                   time = as.numeric(str_sub(str_split(colnames(data), pattern = "_", simplify = TRUE)[,2], 3)),
+                   cond = str_split(colnames(data), pattern = "_", simplify = TRUE)[,1])
+  sm <- cbind(sm, limorhyde(sm$time, 'time_')) %>% as.data.table
+  
+  #Identify rhythmic genes
+  rhyLimma <- foreach(condNow = unique(sm$cond), .combine = rbind) %do% {
+    design <- model.matrix(~ time_cos + time_sin, data = sm[cond == condNow])
+    fit <- lmFit(data[, sm$cond == condNow], design)
+    fit <- eBayes(fit, trend = TRUE)
+    rhyNow <- data.table(topTable(fit, coef = 2:3, number = Inf), keep.rownames = TRUE)
+    setnames(rhyNow, 'rn', 'geneId')
+    rhyNow[, cond := condNow]
+  }
+  rhyLimmaSummary <- rhyLimma[, .(P.Value = min(P.Value)), by = geneId]
+  rhyLimmaSummary[, adj.P.Val := p.adjust(P.Value, method = 'BH')]
+  
+  #Identify differentially rhythmic genes
+  design <- model.matrix(~ cond * (time_cos + time_sin), data = sm)
   fit <- lmFit(data, design)
   fit <- eBayes(fit, trend = TRUE)
+  drLimma <- data.table(topTable(fit, coef = 5:6, number = Inf), keep.rownames = TRUE)
+  setnames(drLimma, 'rn', 'geneId')
+  drLimma <- drLimma[geneId %in% rhyLimmaSummary[adj.P.Val <= qvalRhyCutoff]$geneId]
+  drLimma[, adj.P.Val := p.adjust(P.Value, method = 'BH')]
+  drLimma <- drLimma[drLimma$adj.P.Val <= qvalDrCutoff]
+  
+  #Identify differentially expressed genes
+  design <- model.matrix(~ cond + time_cos + time_sin, data = sm)
+  fit <- lmFit(data, design)
+  fit <- eBayes(fit, trend = TRUE)
+  deLimma <- data.table(topTable(fit, coef = 2, number = Inf), keep.rownames = TRUE)
+  setnames(deLimma, 'rn', 'geneId')
+  deLimma <- deLimma[!(geneId %in% drLimma[adj.P.Val <= qvalDrCutoff]$geneId)]
+  deLimma[, adj.P.Val := p.adjust(P.Value, method = 'BH')]
   tmp <- toc()
   result <- result %>% add_row(method = "LimoRhyde",
                                param = NA,
