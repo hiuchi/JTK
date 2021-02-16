@@ -346,7 +346,7 @@ for(org in c("forebrain", "heart", "hindbrain", "kidney", "liver", "ovary", "tes
                                gene_id = drLimma$geneId,
                                method = "LimoRhyde",
                                p = drLimma$P.Value,
-                               q = p.adjust(drLimma$P.Value, method = "BH"))
+                               q = drLimma$adj.P.Val)
   
   #Identify differentially expressed genes
   design <- model.matrix(~ cond + time_cos + time_sin, data = sm)
@@ -360,7 +360,7 @@ for(org in c("forebrain", "heart", "hindbrain", "kidney", "liver", "ovary", "tes
                                gene_id = deLimma$geneId,
                                method = "LimoRhyde",
                                p = deLimma$P.Value,
-                               q = p.adjust(deLimma$P.Value, method = "BH"))
+                               q = deLimma$adj.P.Val)
   
   #ImpulseDE2
   if(org %in% c("forebrain", "hindbrain")){
