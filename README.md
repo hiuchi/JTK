@@ -4,7 +4,7 @@
 [Figure 4](/Figure4.R)  
 [Figure 5](/Figure5/)  
 [Figures 6 and 7](/Figures6and7/)  
-[Figure 8](/Figure8.R)
+[Figure 8](/Figure8.R)  
 [Table S1](/TableS1.R)
 
 # Usage
