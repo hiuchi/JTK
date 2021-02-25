@@ -1,7 +1,5 @@
 #This is the source code to reproduce Figures 2 and 3.
 
-setwd("~/Research/JTK/210204_short/")
-
 require(tidyverse)
 require(poweRlaw)
 require(ImpulseDE2)
