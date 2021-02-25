@@ -1,4 +1,4 @@
-#This is the source code to reproduce Figure 7.
+#This is the source code to reproduce Figure 8.
 
 require(tidyverse)
 require(poweRlaw)
