@@ -5,6 +5,7 @@
 [Figure 5](/Figure5/)  
 [Figures 6 and 7](/Figures6and7/)  
 [Figure 8](/Figure8.R)
+[Table S1](/TableS1.R)
 
 # Usage
 First, we set random seed and define functions.
